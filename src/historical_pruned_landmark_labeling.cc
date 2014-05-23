@@ -3,6 +3,7 @@
 #include <climits>
 #include <xmmintrin.h>
 #include <algorithm>
+#include <cstdint>
 using namespace std;
 
 #define rep(i, n) for (int i = 0; i < (int)(n); i++)
@@ -73,8 +74,8 @@ void historical_pruned_landmark_labeling::construct_index(const char *filename) 
 
 void historical_pruned_landmark_labeling::construct_index(istream &ifs) {
   std::vector<std::tuple<int, int, int> > es;
-  for (int v, w, t; ifs >> v >> w >> t; ) es.emplace_back(v, w, t);
-  CHECK(ifs.good());
+  for (int t, v, w; ifs >> t >> v >> w; ) es.emplace_back(t, v, w);
+  CHECK(!ifs.bad());
   construct_index(es);
 }
 
@@ -82,12 +83,13 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
   // Setup the graph
   V = 0;
   for (const auto &e : es) {
-    V = max({V, get<0>(e) + 1, get<1>(e) + 1});
+    V = max({V, get<1>(e) + 1, get<2>(e) + 1});
   }
   adj.assign(V, vector<edge_t>());
   for (const auto &e : es) {
-    adj[get<0>(e)].push_back((edge_t){get<1>(e), get<2>(e)});
-    adj[get<1>(e)].push_back((edge_t){get<0>(e), get<2>(e)});
+    CHECK(get<0>(e) >= 0);
+    adj[get<1>(e)].push_back((edge_t){get<2>(e), get<0>(e)});
+    adj[get<2>(e)].push_back((edge_t){get<1>(e), get<0>(e)});
   }
 
   // Prepare
@@ -194,6 +196,7 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
       pdiff_nxt_que.clear();
 
 #pragma omp flush
+
     }
 
     rep (i, get_max_threads()) {
@@ -276,3 +279,25 @@ void historical_pruned_landmark_labeling::query_change_points(int v, int w,
   cp.resize(j);
 }
 
+void historical_pruned_landmark_labeling::get_label(
+    int v, vector<label_entry_t> &label) {
+  if (v < 0 || V <= v) label.clear();
+  else label = labels[v];
+}
+
+void historical_pruned_landmark_labeling::get_index(
+    vector<vector<label_entry_t>> &index) {
+  index = labels;
+}
+
+double historical_pruned_landmark_labeling::get_average_label_size() {
+  size_t n = 0;
+  rep (v, V) n += labels[v].size() - 1;  // -1 for the sentinels
+  return n / (double)V;
+}
+
+size_t historical_pruned_landmark_labeling::get_index_size() {
+  size_t n = 0;
+  rep (v, V) n += labels[v].size() - 1;  // -1 for the sentinels
+  return n * (sizeof(int32_t) + sizeof(int8_t) + sizeof(int32_t));
+}

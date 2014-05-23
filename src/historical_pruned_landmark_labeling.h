@@ -36,9 +36,14 @@
 
 class historical_pruned_landmark_labeling {
  public:
+  struct label_entry_t {
+    int v, d, t;
+  };
+
   // Constructs an index from a graph, given as a list of edges.
+  // Each edge is described as a tuple of creation time and vertices (in this order).
   // Vertices should be described by numbers starting from zero.
-  // Returns |true| when successful.
+  // Time should be described by non-negative integers.
   void construct_index(const std::vector<std::tuple<int, int, int>> &es);
   void construct_index(std::istream &ifs);
   void construct_index(const char *filename);
@@ -51,13 +56,15 @@ class historical_pruned_landmark_labeling {
   // (i.e., t_0 < t_1 < ..., and d_0 > d_1 > ...)
   void query_change_points(int v, int w, std::vector<std::pair<int, int>> &cp);
 
+  // Index access
+  void get_label(int v, std::vector<label_entry_t> &label);
+  void get_index(std::vector<std::vector<label_entry_t>> &index);
+  double get_average_label_size();  // average number of entries
+  size_t get_index_size();          // size in bytes
+
  private:
   struct edge_t {
     int v, t;
-  };
-
-  struct label_entry_t {
-    int v, d, t;
   };
 
   struct label_entry_cmp {

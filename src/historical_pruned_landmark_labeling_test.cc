@@ -5,9 +5,9 @@ using namespace std;
 
 TEST(hpll, triangle) {
   vector<tuple<int, int, int>> es ={
-    make_tuple(0, 1, 1),
-    make_tuple(1, 2, 2),
-    make_tuple(0, 2, 3),
+    make_tuple(1, 0, 1),
+    make_tuple(2, 1, 2),
+    make_tuple(3, 0, 2),
   };
 
   historical_pruned_landmark_labeling hpll;
