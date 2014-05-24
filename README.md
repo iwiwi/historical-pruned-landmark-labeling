@@ -21,10 +21,12 @@ Given a graph with edge time stamps, it first constructs an index. Then, using t
 ### From CUI Interfaces
 
     $ make
-    $ bin/query_change_point sample/example.tsv <<< "0 2"
+    $ bin/construct_index sample/example.tsv tmp.dat
+    $ bin/query_change_point tmp.dat <<< "0 2"
     0:-1	200:2	300:1
 
 * Execute `make` to build programs.
+* Execute `bin/construct_index` to construct an index.
 * Execute `bin/query_snapshot` to process snapshot queries.
 * Execute `bin/query_change_point` to process change-point queries.
 
@@ -46,7 +48,7 @@ For further information, please see `historical_pruned_landmark_labeling.h`, sam
 * Vertices should be described by integers starting from zero.
 * CUI interfaces read and process queries until EOF.
 * Execute `make test` to run tests (*google-gtest* is required).
-
+* Only serialization depends on boost (boost::serialization). Note that, if you do not need to use serialization, you can use this library on systems without boost.
 
 ## Reference
 
