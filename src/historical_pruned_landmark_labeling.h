@@ -70,6 +70,16 @@ class historical_pruned_landmark_labeling {
   void construct_index(std::istream &ifs);
   void construct_index(const char *filename);
 
+  // Index access
+  void get_label(int v, std::vector<label_entry_t> &label);
+  void get_index(std::vector<std::vector<label_entry_t>> &index);
+  double get_average_label_size();  // average number of entries
+  size_t get_index_size();          // size in bytes
+
+  // Incremental index update
+  // |t| must be larger than or equal to that of any existing edge.
+  void insert_edge(int v, int w, int t);
+
   // Returns the distance between vertices |v| and |w| at time |t|.
   int query_snapshot(int v, int w, int t);
 
@@ -77,12 +87,6 @@ class historical_pruned_landmark_labeling {
   // gets |d_i| for the first time at time |t_i|.
   // (i.e., t_0 < t_1 < ..., and d_0 > d_1 > ...)
   void query_change_points(int v, int w, std::vector<std::pair<int, int>> &cp);
-
-  // Index access
-  void get_label(int v, std::vector<label_entry_t> &label);
-  void get_index(std::vector<std::vector<label_entry_t>> &index);
-  double get_average_label_size();  // average number of entries
-  size_t get_index_size();          // size in bytes
 
  private:
   struct edge_t {
@@ -102,17 +106,26 @@ class historical_pruned_landmark_labeling {
     }
   };
 
+  // Graph and index
   int V;
   std::vector<std::vector<edge_t>> adj;
+  std::vector<int> ord;
   std::vector<std::vector<label_entry_t>> labels;
 
+  // Incremental update
+  std::vector<std::pair<int, int> > que;
+  std::vector<bool> vis;
+  std::vector<int> root_label;
+
   void get_root_order(std::vector<int> &ord);
+  void partial_bfs(int bfs_i, int sv, int sd, int st);
 
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive& ar, unsigned int ver __attribute__((unused))) {
     ar & V;
     ar & adj;
+    ar & ord;
     ar & labels;
   }
 };

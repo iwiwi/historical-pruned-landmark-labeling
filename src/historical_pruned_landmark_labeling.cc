@@ -87,8 +87,7 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
   // Prepare
   labels.clear();
   labels.resize(V);
-  rep (v, V) labels[v].push_back(((label_entry_t){V, 0, 0}));
-  vector<int> ord;
+  rep (v, V) labels[v].push_back(((label_entry_t){INT_MAX, 0, 0}));
 
   // crr_time[v] = t  <=>  can reach |v| with distance |d|   on or after time |t|
   // nxt_time[v] = t  <=>  can reach |v| with distance |d+1| on or after time |t|
@@ -127,7 +126,7 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
           else if (s1[i1].v > s2[i2].v) ++i2;
           else {
             int v = s1[i1].v;
-            if (v == V) break;
+            if (v == INT_MAX) break;
 
             int q = int(s1[i1].d) + int(s2[i2].d);
             if (q <= d) goto prune;
@@ -137,7 +136,6 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
         }
 
         // Label
-        // #pragma omp critical
         pdiff_labels.push_back(make_pair(v, ((label_entry_t){source_i, d, t})));
 
         // Traverse
@@ -172,7 +170,7 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
       rep (i, get_max_threads()) {
         rep (j, pdiff_labels.n[i]) {
           labels[pdiff_labels.v[i][j].first].back() = pdiff_labels.v[i][j].second;
-          labels[pdiff_labels.v[i][j].first].push_back(((label_entry_t){V, 0, 0}));
+          labels[pdiff_labels.v[i][j].first].push_back(((label_entry_t){INT_MAX, 0, 0}));
           num_labels_added++;
         }
         rep (j, pdiff_nxt_que.n[i]) {
@@ -209,69 +207,6 @@ void historical_pruned_landmark_labeling::get_root_order(vector<int> &ord) {
   rep (i, V) ord[i] = deg[i].second;
 }
 
-int historical_pruned_landmark_labeling::query_snapshot(int v, int w, int t) {
-  if (v < 0 || w < 0 || V <= v || V <= w) return -1;
-
-  const vector<label_entry_t> &s1 = labels[v];
-  const vector<label_entry_t> &s2 = labels[w];
-  int d = INT_MAX;
-
-  size_t i1 = 0, i2 = 0;
-  while (i1 < s1.size() && i2 < s2.size()) {
-    /***/if (s1[i1].t > t) ++i1;
-    else if (s2[i2].t > t) ++i2;
-    else if (s1[i1].v < s2[i2].v) ++i1;
-    else if (s1[i1].v > s2[i2].v) ++i2;
-    else {
-      int v = s1[i1].v;
-      if (v == V) break;
-
-      d = min(d, int(s1[i1].d) + int(s2[i2].d));
-      for (++i1; s1[i1].v == v; ++i1);
-      for (++i2; s2[i2].v == v; ++i2);
-    }
-  }
-  return d == INT_MAX ? -1 : d;
-}
-
-void historical_pruned_landmark_labeling::query_change_points(int v, int w,
-                                                              vector<pair<int, int>> &cp) {
-  cp.clear();
-  cp.emplace_back(0, INT_MAX);
-  if (v < 0 || w < 0 || V <= v || V <= w) return;
-
-  vector<label_entry_t> &s1 = labels[v];
-  vector<label_entry_t> &s2 = labels[w];
-  if (s1.back().v != V) s1.push_back(((label_entry_t){V, 0, 0}));
-  if (s2.back().v != V) s2.push_back(((label_entry_t){V, 0, 0}));
-
-  size_t i1 = 0, i2 = 0;
-  for (;;) {
-    /***/if (s1[i1].v < s2[i2].v) ++i1;
-    else if (s1[i1].v > s2[i2].v) ++i2;
-    else {
-      int x = s1[i1].v;
-      if (x == V) break;  // Sentinel
-
-      while (s1[i1].v == x && s2[i2].v == x) {
-        cp.emplace_back(max(s1[i1].t, s2[i2].t), s1[i1].d + s2[i2].d);
-        if (s2[i2 + 1].v != x || (s1[i1 + 1].v == x && s1[i1].t > s2[i2].t)) ++i1;
-        else                                                                 ++i2;
-      }
-    }
-  }
-
-  sort(cp.begin(), cp.end());
-  int j = 1;
-  for (int i = 1; i < (int)cp.size(); ++i) {
-    if (cp[j - 1].second > cp[i].second) cp[j++] = cp[i];
-  }
-  cp.resize(j);
-  for (auto &p : cp) {
-    if (p.second == INT_MAX) p.second = -1;
-  }
-}
-
 void historical_pruned_landmark_labeling::get_label(
     int v, vector<label_entry_t> &label) {
   if (v < 0 || V <= v) label.clear();
@@ -293,4 +228,165 @@ size_t historical_pruned_landmark_labeling::get_index_size() {
   size_t n = 0;
   rep (v, V) n += labels[v].size() - 1;  // -1 for the sentinels
   return n * (sizeof(int32_t) + sizeof(int8_t) + sizeof(int32_t));
+}
+
+void historical_pruned_landmark_labeling::partial_bfs(int bfs_i, int sv, int sd, int st) {
+  if ((int)que.size() < V) {
+    que.resize(V * 2 + 10);
+    vis.resize(V * 2 + 10);
+    root_label.resize(V * 2 + 10);
+  }
+
+  int r = ord[bfs_i];
+  const vector<label_entry_t> &idx_r = labels[r];
+  for (int i = int(idx_r.size()) - 1; i >= 0; --i) {
+    if (idx_r[i].v == INT_MAX) continue;
+    root_label[idx_r[i].v] = idx_r[i].d;
+  }
+
+  int que_h = 0, que_t = 0;
+  que[que_t++] = make_pair(sv, sd);
+  vis[sv] = true;
+
+  while (que_h < que_t) {
+    int v = que[que_h].first;
+    int d = que[que_h].second;
+    ++que_h;
+
+    // Puruning test & new label
+    {
+      vector<label_entry_t> &idx_v = labels[v];
+
+      int i = 0;
+      for (; idx_v[i].v <= bfs_i; ++i) {
+        label_entry_t &l = idx_v[i];
+        if (root_label[l.v] != -1 && root_label[l.v] + l.d <= d) goto prune;
+        if (l.v == bfs_i) break;
+      }
+
+      for (int j = int(idx_v.size()) - 1; j - 1 >= i; --j) idx_v[j] = idx_v[j - 1];
+      idx_v.push_back(((label_entry_t){INT_MAX, 0, 0}));
+      idx_v[i] = (label_entry_t){bfs_i, d, st};
+    }
+
+    rep (i, adj[v].size()) {
+      int w = adj[v][i].v;
+      if (!vis[w]) {
+        que[que_t++] = make_pair(w, d + 1);
+        vis[w] = true;
+      }
+    }
+
+ prune:;
+  }
+
+  rep (i, que_t) vis[que[i].first] = false;
+  rep (i, idx_r.size()) {
+    if (idx_r[i].v == INT_MAX) continue;
+    root_label[idx_r[i].v] = -1;
+  }
+}
+
+void historical_pruned_landmark_labeling::insert_edge(int u, int v, int t) {
+  if (max(u, v) >= V) {
+    int x = V;
+    V = max(u, v) + 1;
+    for (; x < V; ++x) {
+      labels.emplace_back();
+      labels.back().push_back((label_entry_t){x, 0, 0});
+      labels.back().push_back((label_entry_t){INT_MAX, 0, 0});
+      ord.push_back(x);
+    }
+    adj.resize(V);
+  }
+  adj[u].push_back((edge_t){v, t});
+  adj[v].push_back((edge_t){u, t});
+  const vector<label_entry_t> &idx_u = labels[u];
+  const vector<label_entry_t> &idx_v = labels[v];
+
+  int iu = 0, iv = 0, prv_v = -1;
+  for (;;) {
+    label_entry_t lu = idx_u[iu];
+    label_entry_t lv = idx_v[iv];
+
+    /***/if (iu > 0 && idx_u[iu].v == prv_v) ++iu;
+    else if (iv > 0 && idx_v[iv].v == prv_v) ++iv;
+    else if (lu.v < lv.v) {  // u -> v
+      partial_bfs(prv_v = lu.v, v, lu.d + 1, t);
+      ++iu;
+    } else if (lu.v > lv.v) {  // v -> u
+      partial_bfs(prv_v = lv.v, u, lv.d + 1, t);
+      ++iv;
+    } else {  // u <-> v
+      if (lu.v == INT_MAX) break;  // sentinel
+      if (lu.d + 1 < lv.d) partial_bfs(lu.v, v, lu.d + 1, t);
+      if (lv.d + 1 < lu.d) partial_bfs(lv.v, u, lv.d + 1, t);
+      prv_v = lu.v;
+      ++iu;
+      ++iv;
+    }
+  }
+}
+
+int historical_pruned_landmark_labeling::query_snapshot(int v, int w, int t) {
+  if (v < 0 || w < 0 || V <= v || V <= w) return -1;
+
+  const vector<label_entry_t> &s1 = labels[v];
+  const vector<label_entry_t> &s2 = labels[w];
+  int d = INT_MAX;
+
+  size_t i1 = 0, i2 = 0;
+  while (i1 < s1.size() && i2 < s2.size()) {
+    /***/if (s1[i1].t > t) ++i1;
+    else if (s2[i2].t > t) ++i2;
+    else if (s1[i1].v < s2[i2].v) ++i1;
+    else if (s1[i1].v > s2[i2].v) ++i2;
+    else {
+      int v = s1[i1].v;
+      if (v == INT_MAX) break;
+
+      d = min(d, int(s1[i1].d) + int(s2[i2].d));
+      for (++i1; s1[i1].v == v; ++i1);
+      for (++i2; s2[i2].v == v; ++i2);
+    }
+  }
+  return d == INT_MAX ? -1 : d;
+}
+
+void historical_pruned_landmark_labeling::query_change_points(int v, int w,
+                                                              vector<pair<int, int>> &cp) {
+  cp.clear();
+  cp.emplace_back(0, INT_MAX);
+  if (v < 0 || w < 0 || V <= v || V <= w) return;
+
+  vector<label_entry_t> &s1 = labels[v];
+  vector<label_entry_t> &s2 = labels[w];
+  if (s1.back().v != INT_MAX) s1.push_back(((label_entry_t){INT_MAX, 0, 0}));
+  if (s2.back().v != INT_MAX) s2.push_back(((label_entry_t){INT_MAX, 0, 0}));
+
+  size_t i1 = 0, i2 = 0;
+  for (;;) {
+    /***/if (s1[i1].v < s2[i2].v) ++i1;
+    else if (s1[i1].v > s2[i2].v) ++i2;
+    else {
+      int x = s1[i1].v;
+      if (x == INT_MAX) break;  // Sentinel
+
+      while (s1[i1].v == x && s2[i2].v == x) {
+        cp.emplace_back(max(s1[i1].t, s2[i2].t), s1[i1].d + s2[i2].d);
+        if (s2[i2 + 1].v != x || (s1[i1 + 1].v == x && s1[i1].t > s2[i2].t)) ++i1;
+        else                                                                 ++i2;
+      }
+    }
+  }
+
+  sort(cp.begin(), cp.end());
+  int j = 1;
+  for (int i = 1; i < (int)cp.size(); ++i) {
+    if (cp[j - 1].second > cp[i].second) cp[j++] = cp[i];
+  }
+  cp.resize(j);
+  for (auto &p : cp) {
+    if (p.second == INT_MAX) p.second = -1;
+  }
 }

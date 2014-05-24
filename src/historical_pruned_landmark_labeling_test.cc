@@ -49,16 +49,19 @@ TEST(hpll, triangle) {
 }
 
 TEST(hpll, random) {
-  const int kNumTrials = 10, kNumVertices = 50, kNumEdges = 200, kNumQueries = 100000;
+  const int kNumVertices = 50, kNumInitialEdges = 10, kNumAdditionalEdges = 50;
+  const int kNumTrials = 10, kNumQueries = 100;
+  const int kNumEdges = kNumInitialEdges + kNumAdditionalEdges;
 
   for (int trial = 0; trial < kNumTrials; ++trial) {
     vector<tuple<int, int, int>> es(kNumEdges);
     for (int i = 0; i < kNumEdges; ++i) {
       es[i] = make_tuple(rand(), rand() % kNumVertices, rand() % kNumVertices);
     }
+    sort(es.begin(), es.end());
 
     historical_pruned_landmark_labeling a1;
-    a1.construct_index(es);
+    a1.construct_index(vector<tuple<int, int, int>>(es.begin(), es.begin() + kNumInitialEdges));
 
     ostringstream oss;
     boost::archive::binary_oarchive oa(oss);
@@ -69,11 +72,30 @@ TEST(hpll, random) {
     boost::archive::binary_iarchive ia(iss);
     ia >> a2;
 
-    for (int i = 0; i < kNumQueries; ++i) {
+    // Serialization test
+    for (int j = 0; j < kNumQueries; ++j) {
       int v = rand() % kNumVertices;
       int w = rand() % kNumVertices;
       int t = rand();
       ASSERT_EQ(a1.query_snapshot(v, w, t), a2.query_snapshot(v, w, t));
+    }
+
+    // Online incremental update test
+    for (int i = kNumInitialEdges; i < kNumEdges; ++i) {
+      const auto &e = es[i];
+      a1.insert_edge(get<1>(e), get<2>(e), get<0>(e));
+      a2.insert_edge(get<1>(e), get<2>(e), get<0>(e));
+
+      historical_pruned_landmark_labeling a3;
+      a3.construct_index(vector<tuple<int, int, int>>(es.begin(), es.begin() + i + 1));
+
+      for (int j = 0; j < kNumQueries; ++j) {
+        int v = rand() % kNumVertices;
+        int w = rand() % kNumVertices;
+        int t = rand();
+        ASSERT_EQ(a3.query_snapshot(v, w, t), a1.query_snapshot(v, w, t));
+        ASSERT_EQ(a3.query_snapshot(v, w, t), a2.query_snapshot(v, w, t));
+      }
     }
   }
 }
