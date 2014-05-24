@@ -173,7 +173,6 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
      prune:
         {}
       }
-
 #pragma omp flush
 
       crr_que.clear();
@@ -196,7 +195,6 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
       pdiff_nxt_que.clear();
 
 #pragma omp flush
-
     }
 
     rep (i, get_max_threads()) {
@@ -220,7 +218,7 @@ void historical_pruned_landmark_labeling::get_root_order(vector<int> &ord) {
 }
 
 int historical_pruned_landmark_labeling::query_snapshot(int v, int w, int t) {
-  if (v < 0 || w < 0 || V <= v || V <= w) return INT_MAX;
+  if (v < 0 || w < 0 || V <= v || V <= w) return -1;
 
   const vector<label_entry_t> &s1 = labels[v];
   const vector<label_entry_t> &s2 = labels[w];
@@ -241,7 +239,7 @@ int historical_pruned_landmark_labeling::query_snapshot(int v, int w, int t) {
       for (++i2; s2[i2].v == v; ++i2);
     }
   }
-  return d;
+  return d == INT_MAX ? -1 : d;
 }
 
 void historical_pruned_landmark_labeling::query_change_points(int v, int w,
@@ -277,6 +275,9 @@ void historical_pruned_landmark_labeling::query_change_points(int v, int w,
     if (cp[j - 1].second > cp[i].second) cp[j++] = cp[i];
   }
   cp.resize(j);
+  for (auto &p : cp) {
+    if (p.second == INT_MAX) p.second = -1;
+  }
 }
 
 void historical_pruned_landmark_labeling::get_label(

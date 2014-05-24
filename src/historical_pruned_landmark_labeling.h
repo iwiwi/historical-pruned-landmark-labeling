@@ -81,5 +81,4 @@ class historical_pruned_landmark_labeling {
   void get_root_order(std::vector<int> &ord);
 };
 
-
-#endif  // HISTORICAL_PRUNED_LANDMARK_LABELING
+#endif  // HISTORICAL_PRUNED_LANDMARK_LABELING_H_
