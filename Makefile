@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -g -Wall -Wextra -Ilib -pthread -std=c++0x -fopenmp
+CXXFLAGS = -g -Wall -Wextra -Ilib -pthread -std=c++0x -fopenmp -O3
 
 all: bin bin/construct_index bin/query_snapshot bin/query_change_point
 
