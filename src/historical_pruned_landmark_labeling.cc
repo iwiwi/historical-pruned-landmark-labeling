@@ -8,14 +8,6 @@ using namespace std;
 
 #define rep(i, n) for (int i = 0; i < (int)(n); i++)
 
-#define CHECK(expr)                                                     \
-  if (expr) {                                                           \
-  } else {                                                              \
-    fprintf(stderr, "CHECK Failed (%s:%d): %s\n",                       \
-            __FILE__, __LINE__, #expr);                                 \
-    exit(EXIT_FAILURE);                                                 \
-  }
-
 namespace {
 // Return the number of threads that would be executed in parallel regions
 int get_max_threads() {
@@ -32,7 +24,7 @@ void set_num_threads(int num_threads) {
   omp_set_num_threads(num_threads);
 #else
   if (num_threads != 1) {
-    CHECK(!"compile with -fopenmp");
+    HPLL_CHECK(!"compile with -fopenmp");
   }
 #endif
 }
@@ -68,14 +60,14 @@ struct parallel_vector {
 
 void historical_pruned_landmark_labeling::construct_index(const char *filename) {
   std::ifstream ifs(filename);
-  CHECK(ifs);
+  HPLL_CHECK(ifs);
   construct_index(ifs);
 }
 
 void historical_pruned_landmark_labeling::construct_index(istream &ifs) {
   std::vector<std::tuple<int, int, int> > es;
   for (int t, v, w; ifs >> t >> v >> w; ) es.emplace_back(t, v, w);
-  CHECK(!ifs.bad());
+  HPLL_CHECK(!ifs.bad());
   construct_index(es);
 }
 
@@ -87,7 +79,7 @@ void historical_pruned_landmark_labeling::construct_index(const vector<tuple<int
   }
   adj.assign(V, vector<edge_t>());
   for (const auto &e : es) {
-    CHECK(get<0>(e) >= 0);
+    HPLL_CHECK(get<0>(e) >= 0);
     adj[get<1>(e)].push_back((edge_t){get<2>(e), get<0>(e)});
     adj[get<2>(e)].push_back((edge_t){get<1>(e), get<0>(e)});
   }

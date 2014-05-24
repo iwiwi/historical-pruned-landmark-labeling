@@ -34,11 +34,33 @@
 #include <tuple>
 #include <fstream>
 
+#define HPLL_CHECK(expr)                                                \
+  if (expr) {                                                           \
+  } else {                                                              \
+    fprintf(stderr, "CHECK Failed (%s:%d): %s\n",                       \
+            __FILE__, __LINE__, #expr);                                 \
+    exit(EXIT_FAILURE);                                                 \
+  }
+
+namespace boost {
+namespace serialization {
+class access;
+}
+}
+
 class historical_pruned_landmark_labeling {
  public:
   struct label_entry_t {
     int v, d, t;
+   private:
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive& ar, unsigned int ver __attribute__((unused))) {
+      ar & v & d & t;
+    }
   };
+
+  historical_pruned_landmark_labeling() : V(0) {}
 
   // Constructs an index from a graph, given as a list of edges.
   // Each edge is described as a tuple of creation time and vertices (in this order).
@@ -65,6 +87,12 @@ class historical_pruned_landmark_labeling {
  private:
   struct edge_t {
     int v, t;
+   private:
+    friend class boost::serialization::access;
+    template<class Archive>
+    void serialize(Archive& ar, unsigned int ver __attribute__((unused))) {
+      ar & v & t;
+    }
   };
 
   struct label_entry_cmp {
@@ -79,6 +107,14 @@ class historical_pruned_landmark_labeling {
   std::vector<std::vector<label_entry_t>> labels;
 
   void get_root_order(std::vector<int> &ord);
+
+  friend class boost::serialization::access;
+  template<class Archive>
+  void serialize(Archive& ar, unsigned int ver __attribute__((unused))) {
+    ar & V;
+    ar & adj;
+    ar & labels;
+  }
 };
 
 #endif  // HISTORICAL_PRUNED_LANDMARK_LABELING_H_
